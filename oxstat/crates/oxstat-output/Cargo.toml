@@ -1,0 +1,11 @@
+[package]
+name = "oxstat-output"
+description = "Structured output model and renderers (text, HTML, PDF)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

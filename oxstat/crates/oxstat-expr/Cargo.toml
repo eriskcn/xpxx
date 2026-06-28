@@ -1,0 +1,11 @@
+[package]
+name = "oxstat-expr"
+description = "Expression parser and evaluator for COMPUTE/IF/RECODE"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+winnow = { workspace = true }
+thiserror = { workspace = true }

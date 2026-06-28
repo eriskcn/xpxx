@@ -1,0 +1,20 @@
+[package]
+name = "oxstat-cli"
+description = "CLI binary: batch mode, REPL, pipe-friendly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "oxstat"
+path = "src/main.rs"
+
+[dependencies]
+oxstat-core = { workspace = true }
+oxstat-io = { workspace = true }
+oxstat-syntax = { workspace = true }
+oxstat-output = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

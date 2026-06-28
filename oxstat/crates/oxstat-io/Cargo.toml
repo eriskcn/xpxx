@@ -1,0 +1,15 @@
+[package]
+name = "oxstat-io"
+description = "File I/O: .sav, CSV, Excel, Parquet readers/writers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+arrow = { workspace = true }
+parquet = { workspace = true }
+csv = { workspace = true }
+calamine = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

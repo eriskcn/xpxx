@@ -1,0 +1,11 @@
+[package]
+name = "oxstat-core"
+description = "Core data structures: data frame, missing values, variable metadata"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+arrow = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

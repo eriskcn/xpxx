@@ -1,0 +1,16 @@
+[package]
+name = "oxstat-syntax"
+description = "SPSS syntax parser and command dispatcher"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+oxstat-expr = { workspace = true }
+oxstat-transform = { workspace = true }
+oxstat-stats = { workspace = true }
+oxstat-io = { workspace = true }
+oxstat-output = { workspace = true }
+winnow = { workspace = true }
+thiserror = { workspace = true }

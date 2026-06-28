@@ -1,0 +1,13 @@
+[package]
+name = "oxstat-transform"
+description = "Data transformations: filter, sort, aggregate, merge, reshape"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+oxstat-expr = { workspace = true }
+arrow = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }

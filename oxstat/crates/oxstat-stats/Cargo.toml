@@ -1,0 +1,15 @@
+[package]
+name = "oxstat-stats"
+description = "Statistical procedures: descriptives, inferential, advanced"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+oxstat-output = { workspace = true }
+arrow = { workspace = true }
+nalgebra = { workspace = true }
+faer = { workspace = true }
+rayon = { workspace = true }
+thiserror = { workspace = true }

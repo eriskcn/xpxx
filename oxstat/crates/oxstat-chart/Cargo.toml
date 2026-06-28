@@ -1,0 +1,11 @@
+[package]
+name = "oxstat-chart"
+description = "Chart generation: bar, line, scatter, histogram, boxplot"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+oxstat-core = { workspace = true }
+oxstat-output = { workspace = true }
+thiserror = { workspace = true }
