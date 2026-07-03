@@ -1523,6 +1523,7 @@ dependencies = [
  "oxstat-core",
  "oxstat-io",
  "oxstat-output",
+ "oxstat-stats",
  "oxstat-syntax",
  "tracing",
  "tracing-subscriber",
