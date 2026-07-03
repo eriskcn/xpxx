@@ -21,7 +21,7 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 ├── 1.3 File I/O
 │   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Stub]
 │   ├── 1.3.2 CSV import/export [Done]
-│   ├── 1.3.3 Excel import (calamine crate) [Not Started]
+│   ├── 1.3.3 Excel import (calamine crate) [Done]
 │   └── 1.3.4 Parquet import/export [Not Started]
 ├── 1.4 Expression engine
 │   ├── 1.4.1 COMPUTE-style expression parser [Stub]
