@@ -4,3 +4,5 @@
 
 pub mod csv_io;
 pub mod sav;
+
+pub use csv_io::{read_csv, write_csv};

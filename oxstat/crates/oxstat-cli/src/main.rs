@@ -39,6 +39,16 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    if let Some(data_file) = &cli.data {
+        let dataset = oxstat_io::read_csv(data_file)
+            .map_err(|e| anyhow::anyhow!("Failed to read CSV: {e}"))?;
+        let options = oxstat_stats::descriptives::DescriptivesOptions::default();
+        let output = oxstat_stats::descriptives::run(&dataset, &options);
+        let rendered = oxstat_output::render_text(&output);
+        println!("{rendered}");
+        return Ok(());
+    }
+
     // No arguments — show help
     println!("Use --help for usage. Try --repl for interactive mode.");
     Ok(())
