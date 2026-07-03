@@ -40,6 +40,12 @@ impl Dataset {
         self.name_index.get(&key).map(|&i| &self.variables[i])
     }
 
+    /// Look up a variable's index by name (case-insensitive).
+    pub fn variable_index(&self, name: &str) -> Option<usize> {
+        let key = name.to_uppercase();
+        self.name_index.get(&key).copied()
+    }
+
     /// Add a variable definition.
     pub fn add_variable(&mut self, var: Variable) {
         let key = var.name.to_uppercase();

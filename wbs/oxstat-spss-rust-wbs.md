@@ -40,7 +40,7 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 ```
 2.0 Statistical Procedures — Descriptives
 ├── 2.1 FREQUENCIES (freq tables, histograms, percentiles) [Not Started]
-├── 2.2 DESCRIPTIVES (mean, sd, skew, kurtosis, z-scores) [Stub]
+├── 2.2 DESCRIPTIVES (mean, sd, skew, kurtosis, z-scores) [Done]
 ├── 2.3 EXPLORE (stem-and-leaf, boxplots, normality tests) [Not Started]
 ├── 2.4 CROSSTABS (chi-square, phi, Cramér's V, lambda, odds ratio) [Not Started]
 ├── 2.5 MEANS / EXAMINE (subgroup statistics) [Not Started]
