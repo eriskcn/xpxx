@@ -1,3 +1,6 @@
 .claude
 CLAUDE.md
 wbs/reports
+target/
+**/target/
+.DS_Store
