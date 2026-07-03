@@ -40,8 +40,13 @@ fn main() -> Result<()> {
     }
 
     if let Some(data_file) = &cli.data {
-        let dataset = oxstat_io::read_csv(data_file)
-            .map_err(|e| anyhow::anyhow!("Failed to read CSV: {e}"))?;
+        let dataset = if data_file.ends_with(".xlsx") || data_file.ends_with(".xls") {
+            oxstat_io::read_excel(data_file, None)
+                .map_err(|e| anyhow::anyhow!("Failed to read Excel: {e}"))?
+        } else {
+            oxstat_io::read_csv(data_file)
+                .map_err(|e| anyhow::anyhow!("Failed to read CSV: {e}"))?
+        };
         let options = oxstat_stats::descriptives::DescriptivesOptions::default();
         let output = oxstat_stats::descriptives::run(&dataset, &options);
         let rendered = oxstat_output::render_text(&output);
