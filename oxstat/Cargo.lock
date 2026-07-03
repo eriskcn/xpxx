@@ -1557,6 +1557,7 @@ dependencies = [
  "oxstat-core",
  "parquet",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 
