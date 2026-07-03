@@ -12,43 +12,43 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 
 ```
 1.0 Core Infrastructure
-├── 1.1 Project scaffolding (cargo workspace, CI, linting, docs)
+├── 1.1 Project scaffolding (cargo workspace, CI, linting, docs) [Done]
 ├── 1.2 Data engine
-│   ├── 1.2.1 Columnar in-memory data frame (Apache Arrow backing)
-│   ├── 1.2.2 Missing value system (SYSMIS, user-defined missing)
-│   ├── 1.2.3 Variable metadata (labels, value labels, measurement level)
-│   └── 1.2.4 Variable types (numeric, string, date/time)
+│   ├── 1.2.1 Columnar in-memory data frame (Apache Arrow backing) [Done]
+│   ├── 1.2.2 Missing value system (SYSMIS, user-defined missing) [Done]
+│   ├── 1.2.3 Variable metadata (labels, value labels, measurement level) [Done]
+│   └── 1.2.4 Variable types (numeric, string, date/time) [Done]
 ├── 1.3 File I/O
-│   ├── 1.3.1 SPSS .sav reader/writer (binary format)
-│   ├── 1.3.2 CSV import/export
-│   ├── 1.3.3 Excel import (calamine crate)
-│   └── 1.3.4 Parquet import/export
+│   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Stub]
+│   ├── 1.3.2 CSV import/export [Done]
+│   ├── 1.3.3 Excel import (calamine crate) [Not Started]
+│   └── 1.3.4 Parquet import/export [Not Started]
 ├── 1.4 Expression engine
-│   ├── 1.4.1 COMPUTE-style expression parser
-│   ├── 1.4.2 Built-in functions (math, string, date, statistical)
-│   └── 1.4.3 Conditional logic (IF/RECODE/DO IF)
+│   ├── 1.4.1 COMPUTE-style expression parser [Stub]
+│   ├── 1.4.2 Built-in functions (math, string, date, statistical) [Stub]
+│   └── 1.4.3 Conditional logic (IF/RECODE/DO IF) [Stub]
 └── 1.5 Data transformations
-    ├── 1.5.1 SELECT IF / FILTER
-    ├── 1.5.2 SORT CASES
-    ├── 1.5.3 AGGREGATE
-    ├── 1.5.4 MERGE FILES (match files, add files)
-    └── 1.5.5 RESHAPE (cases-to-vars, vars-to-cases)
+    ├── 1.5.1 SELECT IF / FILTER [Stub]
+    ├── 1.5.2 SORT CASES [Stub]
+    ├── 1.5.3 AGGREGATE [Stub]
+    ├── 1.5.4 MERGE FILES (match files, add files) [Stub]
+    └── 1.5.5 RESHAPE (cases-to-vars, vars-to-cases) [Stub]
 ```
 
 ### Phase 2: Descriptive Statistics (Months 3–5)
 
 ```
 2.0 Statistical Procedures — Descriptives
-├── 2.1 FREQUENCIES (freq tables, histograms, percentiles)
-├── 2.2 DESCRIPTIVES (mean, sd, skew, kurtosis, z-scores)
-├── 2.3 EXPLORE (stem-and-leaf, boxplots, normality tests)
-├── 2.4 CROSSTABS (chi-square, phi, Cramér's V, lambda, odds ratio)
-├── 2.5 MEANS / EXAMINE (subgroup statistics)
+├── 2.1 FREQUENCIES (freq tables, histograms, percentiles) [Not Started]
+├── 2.2 DESCRIPTIVES (mean, sd, skew, kurtosis, z-scores) [Stub]
+├── 2.3 EXPLORE (stem-and-leaf, boxplots, normality tests) [Not Started]
+├── 2.4 CROSSTABS (chi-square, phi, Cramér's V, lambda, odds ratio) [Not Started]
+├── 2.5 MEANS / EXAMINE (subgroup statistics) [Not Started]
 └── 2.6 Output system
-    ├── 2.6.1 Structured output model (tables, charts, text, notes)
-    ├── 2.6.2 Plain text renderer
-    ├── 2.6.3 HTML renderer
-    └── 2.6.4 PDF renderer (via printpdf or typst)
+    ├── 2.6.1 Structured output model (tables, charts, text, notes) [Done]
+    ├── 2.6.2 Plain text renderer [Done]
+    ├── 2.6.3 HTML renderer [Not Started]
+    └── 2.6.4 PDF renderer (via printpdf or typst) [Not Started]
 ```
 
 ### Phase 3: Inferential Statistics (Months 5–8)
