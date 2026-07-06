@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow::array::Array;
+use arrow::array::{Array, ArrayRef, Float64Builder, StringBuilder};
 use arrow::record_batch::RecordBatch;
 use winnow::prelude::*;
 use winnow::ascii::{float, space0, Caseless};
@@ -49,6 +49,65 @@ pub enum Expr {
         min_valid: Option<usize>,
         args: Vec<Expr>,
     },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Stmt {
+    Compute { target: String, expr: Expr },
+    If(IfStmt),
+    Recode(RecodeStmt),
+    DoIf(DoIfStmt),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct IfStmt {
+    pub condition: Expr,
+    pub target: String,
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecodeValue {
+    Numeric(f64),
+    String(String),
+    Sysmis,
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecodeInput {
+    Single(RecodeValue),
+    Range(f64, f64),
+    LowestThru(f64),
+    ThruHighest(f64),
+    Else,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum RecodeOutput {
+    Value(Value),
+    Copy,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecodeMapping {
+    pub inputs: Vec<RecodeInput>,
+    pub output: RecodeOutput,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RecodeStmt {
+    pub src_vars: Vec<String>,
+    pub mappings: Vec<RecodeMapping>,
+    pub target_vars: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DoIfStmt {
+    pub condition: Expr,
+    pub body: Vec<Stmt>,
+    pub else_ifs: Vec<(Expr, Vec<Stmt>)>,
+    pub else_body: Option<Vec<Stmt>>,
 }
 
 // Case-insensitive keyword helper
@@ -412,6 +471,298 @@ pub fn parse(input: &str) -> Result<Expr, String> {
         return Err(format!("Trailing characters: '{}'", input_ref));
     }
     Ok(expr)
+}
+
+fn parse_compute_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
+    let _ = keyword("COMPUTE").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let target = parse_identifier.parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let _ = literal("=").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let expr = parse_expr.parse_next(input)?;
+    let _ = opt(literal(".")).parse_next(input)?;
+    Ok(Stmt::Compute { target, expr })
+}
+
+fn parse_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
+    let _ = keyword("IF").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let condition = parse_expr.parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let target = parse_identifier.parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let _ = literal("=").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let expr = parse_expr.parse_next(input)?;
+    let _ = opt(literal(".")).parse_next(input)?;
+    Ok(Stmt::If(IfStmt { condition, target, expr }))
+}
+
+fn parse_identifier_list<'s>(input: &mut &'s str) -> PResult<Vec<String>> {
+    let mut list = Vec::new();
+    let first = parse_identifier.parse_next(input)?;
+    list.push(first);
+    loop {
+        let checkpoint = *input;
+        let _ = space0.parse_next(input)?;
+        if let Ok(ident) = parse_identifier.parse_next(input) {
+            let upper = ident.to_uppercase();
+            if upper == "INTO" || upper == "THRU" || upper == "ELSE" || upper == "MISSING" || upper == "SYSMIS" || upper == "COPY" {
+                *input = checkpoint;
+                break;
+            }
+            list.push(ident);
+        } else {
+            *input = checkpoint;
+            break;
+        }
+    }
+    Ok(list)
+}
+
+fn parse_recode_value<'s>(input: &mut &'s str) -> PResult<RecodeValue> {
+    let checkpoint = *input;
+    if keyword("SYSMIS").parse_next(input).is_ok() {
+        return Ok(RecodeValue::Sysmis);
+    }
+    if keyword("MISSING").parse_next(input).is_ok() {
+        return Ok(RecodeValue::Missing);
+    }
+    if let Ok(Value::Numeric(val)) = parse_number(input) {
+        return Ok(RecodeValue::Numeric(val));
+    }
+    if let Ok(Value::String(val)) = parse_string(input) {
+        return Ok(RecodeValue::String(val));
+    }
+    *input = checkpoint;
+    fail.parse_next(input)
+}
+
+fn parse_recode_input<'s>(input: &mut &'s str) -> PResult<RecodeInput> {
+    let _ = space0.parse_next(input)?;
+    let checkpoint = *input;
+
+    if keyword("ELSE").parse_next(input).is_ok() {
+        return Ok(RecodeInput::Else);
+    }
+
+    if keyword("LOWEST").parse_next(input).is_ok() || keyword("LO").parse_next(input).is_ok() {
+        let _ = space0.parse_next(input)?;
+        let _ = keyword("THRU").parse_next(input)?;
+        let _ = space0.parse_next(input)?;
+        let val: f64 = float.parse_next(input)?;
+        return Ok(RecodeInput::LowestThru(val));
+    }
+
+    if let Ok(val1) = float.parse_next(input) {
+        let _ = space0.parse_next(input)?;
+        let checkpoint_thru = *input;
+        if keyword("THRU").parse_next(input).is_ok() {
+            let _ = space0.parse_next(input)?;
+            let checkpoint_hi = *input;
+            if keyword("HIGHEST").parse_next(input).is_ok() || keyword("HI").parse_next(input).is_ok() {
+                return Ok(RecodeInput::ThruHighest(val1));
+            }
+            if let Ok(val2) = float.parse_next(input) {
+                return Ok(RecodeInput::Range(val1, val2));
+            }
+            *input = checkpoint_hi;
+        }
+        *input = checkpoint_thru;
+        return Ok(RecodeInput::Single(RecodeValue::Numeric(val1)));
+    }
+
+    *input = checkpoint;
+    if let Ok(Value::String(s)) = parse_string(input) {
+        return Ok(RecodeInput::Single(RecodeValue::String(s)));
+    }
+
+    if let Ok(rec_val) = parse_recode_value(input) {
+        return Ok(RecodeInput::Single(rec_val));
+    }
+
+    *input = checkpoint;
+    fail.parse_next(input)
+}
+
+fn parse_recode_output<'s>(input: &mut &'s str) -> PResult<RecodeOutput> {
+    let checkpoint = *input;
+    if keyword("COPY").parse_next(input).is_ok() {
+        return Ok(RecodeOutput::Copy);
+    }
+    if keyword("SYSMIS").parse_next(input).is_ok() {
+        return Ok(RecodeOutput::Value(Value::SystemMissing));
+    }
+    if let Ok(Value::Numeric(val)) = parse_number(input) {
+        return Ok(RecodeOutput::Value(Value::Numeric(val)));
+    }
+    if let Ok(Value::String(val)) = parse_string(input) {
+        return Ok(RecodeOutput::Value(Value::String(val)));
+    }
+    *input = checkpoint;
+    fail.parse_next(input)
+}
+
+fn parse_recode_mapping<'s>(input: &mut &'s str) -> PResult<RecodeMapping> {
+    let _ = literal("(").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+
+    let mut inputs = Vec::new();
+    let first = parse_recode_input(input)?;
+    inputs.push(first);
+    loop {
+        let _ = space0.parse_next(input)?;
+        if let Some(rest) = input.strip_prefix(',') {
+            *input = rest;
+            let _ = space0.parse_next(input)?;
+        }
+        let checkpoint = *input;
+        if let Ok(inp) = parse_recode_input(input) {
+            inputs.push(inp);
+        } else {
+            *input = checkpoint;
+            break;
+        }
+    }
+
+    let _ = space0.parse_next(input)?;
+    let _ = literal("=").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+
+    let output = parse_recode_output(input)?;
+
+    let _ = space0.parse_next(input)?;
+    let _ = literal(")").parse_next(input)?;
+
+    Ok(RecodeMapping { inputs, output })
+}
+
+fn parse_recode_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
+    let _ = keyword("RECODE").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let src_vars = parse_identifier_list(input)?;
+    let _ = space0.parse_next(input)?;
+
+    let mut mappings = Vec::new();
+    let first_map = parse_recode_mapping(input)?;
+    mappings.push(first_map);
+    loop {
+        let _ = space0.parse_next(input)?;
+        let checkpoint = *input;
+        if let Ok(map) = parse_recode_mapping(input) {
+            mappings.push(map);
+        } else {
+            *input = checkpoint;
+            break;
+        }
+    }
+
+    let _ = space0.parse_next(input)?;
+    let mut target_vars = None;
+    if keyword("INTO").parse_next(input).is_ok() {
+        let _ = space0.parse_next(input)?;
+        let target_list = parse_identifier_list(input)?;
+        target_vars = Some(target_list);
+    }
+
+    let _ = opt(literal(".")).parse_next(input)?;
+
+    Ok(Stmt::Recode(RecodeStmt { src_vars, mappings, target_vars }))
+}
+
+fn parse_stmt_internal<'s>(input: &mut &'s str) -> PResult<Stmt> {
+    let _ = space0.parse_next(input)?;
+    alt((
+        parse_compute_stmt,
+        parse_if_stmt,
+        parse_recode_stmt,
+        parse_do_if_stmt,
+    )).parse_next(input)
+}
+
+fn parse_do_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
+    let _ = keyword("DO IF").parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let condition = parse_expr.parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+    let _ = opt(literal(".")).parse_next(input)?;
+    let _ = space0.parse_next(input)?;
+
+    let mut body = Vec::new();
+    let mut else_ifs = Vec::new();
+    let mut else_body = None;
+
+    loop {
+        let _ = space0.parse_next(input)?;
+        let checkpoint = *input;
+
+        if keyword("ELSE IF").parse_next(input).is_ok() {
+            let _ = space0.parse_next(input)?;
+            let elif_cond = parse_expr.parse_next(input)?;
+            let _ = space0.parse_next(input)?;
+            let _ = opt(literal(".")).parse_next(input)?;
+
+            let mut elif_body = Vec::new();
+            loop {
+                let _ = space0.parse_next(input)?;
+                let elif_checkpoint = *input;
+                if keyword("ELSE IF").parse_next(input).is_ok() || keyword("ELSE").parse_next(input).is_ok() || keyword("END IF").parse_next(input).is_ok() {
+                    *input = elif_checkpoint;
+                    break;
+                }
+                let stmt = parse_stmt_internal(input)?;
+                elif_body.push(stmt);
+            }
+            else_ifs.push((elif_cond, elif_body));
+            continue;
+        }
+
+        if keyword("ELSE").parse_next(input).is_ok() {
+            let _ = space0.parse_next(input)?;
+            let _ = opt(literal(".")).parse_next(input)?;
+
+            let mut e_body = Vec::new();
+            loop {
+                let _ = space0.parse_next(input)?;
+                let e_checkpoint = *input;
+                if keyword("END IF").parse_next(input).is_ok() {
+                    *input = e_checkpoint;
+                    break;
+                }
+                let stmt = parse_stmt_internal(input)?;
+                e_body.push(stmt);
+            }
+            else_body = Some(e_body);
+            continue;
+        }
+
+        if keyword("END IF").parse_next(input).is_ok() {
+            let _ = space0.parse_next(input)?;
+            let _ = opt(literal(".")).parse_next(input)?;
+            break;
+        }
+
+        let stmt = parse_stmt_internal(input)?;
+        body.push(stmt);
+    }
+
+    Ok(Stmt::DoIf(DoIfStmt {
+        condition,
+        body,
+        else_ifs,
+        else_body,
+    }))
+}
+
+pub fn parse_statement(input: &str) -> Result<Stmt, String> {
+    let mut input_ref = input.trim();
+    let stmt = parse_stmt_internal(&mut input_ref)
+        .map_err(|e| format!("Parsing error: {:?}", e))?;
+    if !input_ref.is_empty() {
+        return Err(format!("Trailing characters: '{}'", input_ref));
+    }
+    Ok(stmt)
 }
 
 // Date helpers
@@ -1112,6 +1463,323 @@ fn eval_function_call(
     }
 }
 
+fn array_from_values(values: &[Value]) -> (ArrayRef, VariableType) {
+    let is_string = values.iter().any(|v| matches!(v, Value::String(_)));
+    if is_string {
+        let mut builder = StringBuilder::new();
+        let mut max_width = 0;
+        for val in values {
+            match val {
+                Value::String(s) => {
+                    builder.append_value(s);
+                    max_width = max_width.max(s.len());
+                }
+                _ => builder.append_null(),
+            }
+        }
+        let array = Arc::new(builder.finish()) as ArrayRef;
+        let width = if max_width == 0 { 8 } else { max_width };
+        (array, VariableType::String(width as u32))
+    } else {
+        let mut builder = Float64Builder::new();
+        for val in values {
+            match val {
+                Value::Numeric(n) => builder.append_value(*n),
+                _ => builder.append_null(),
+            }
+        }
+        let array = Arc::new(builder.finish()) as ArrayRef;
+        (array, VariableType::Numeric)
+    }
+}
+
+fn eval_recode_value(
+    val: &Value,
+    var_metadata: &Variable,
+    mappings: &[RecodeMapping],
+    in_place: bool,
+) -> Value {
+    for map in mappings {
+        for input in &map.inputs {
+            let matched = match input {
+                RecodeInput::Else => true,
+                RecodeInput::Single(rec_val) => match (val, rec_val) {
+                    (Value::Numeric(n1), RecodeValue::Numeric(n2)) => n1 == n2,
+                    (Value::String(s1), RecodeValue::String(s2)) => s1 == s2,
+                    (Value::SystemMissing, RecodeValue::Sysmis) => true,
+                    (_, RecodeValue::Missing) => val.is_missing() || (match val {
+                        Value::Numeric(n) => var_metadata.missing.is_user_missing(*n),
+                        _ => false,
+                    }),
+                    _ => false,
+                },
+                RecodeInput::Range(lo, hi) => match val {
+                    Value::Numeric(n) => n >= lo && n <= hi,
+                    _ => false,
+                },
+                RecodeInput::LowestThru(hi) => match val {
+                    Value::Numeric(n) => n <= hi,
+                    _ => false,
+                },
+                RecodeInput::ThruHighest(lo) => match val {
+                    Value::Numeric(n) => n >= lo,
+                    _ => false,
+                },
+            };
+            if matched {
+                return match &map.output {
+                    RecodeOutput::Value(out_val) => out_val.clone(),
+                    RecodeOutput::Copy => val.clone(),
+                };
+            }
+        }
+    }
+    if in_place {
+        val.clone()
+    } else {
+        Value::SystemMissing
+    }
+}
+
+impl Stmt {
+    pub fn execute(&self, dataset: &mut Dataset) -> Result<(), String> {
+        let n_batches = dataset.batches.len();
+        let mut mask = Vec::with_capacity(n_batches);
+        for batch in &dataset.batches {
+            mask.push(vec![true; batch.num_rows()]);
+        }
+        self.execute_masked(dataset, &mask)
+    }
+
+    pub fn execute_masked(&self, dataset: &mut Dataset, mask: &[Vec<bool>]) -> Result<(), String> {
+        let n_batches = dataset.batches.len();
+        match self {
+            Stmt::Compute { target, expr } => {
+                let mut new_arrays = Vec::with_capacity(n_batches);
+                let mut final_var_type = None;
+                let target_exists = dataset.variable_index(target).is_some();
+
+                for batch_idx in 0..n_batches {
+                    let n_rows = dataset.batches[batch_idx].num_rows();
+                    let mut values = Vec::with_capacity(n_rows);
+                    for row_idx in 0..n_rows {
+                        if mask[batch_idx][row_idx] {
+                            let val = expr.eval(dataset, batch_idx, row_idx);
+                            values.push(val);
+                        } else {
+                            if target_exists {
+                                let val = get_variable_value(dataset, batch_idx, row_idx, target, false);
+                                values.push(val);
+                            } else {
+                                values.push(Value::SystemMissing);
+                            }
+                        }
+                    }
+                    let (array, var_type) = array_from_values(&values);
+                    new_arrays.push(array);
+                    final_var_type = Some(var_type);
+                }
+
+                let var_type = final_var_type.unwrap_or(VariableType::Numeric);
+                let mut target_var = if target_exists {
+                    dataset.variable(target).unwrap().clone()
+                } else {
+                    match var_type {
+                        VariableType::Numeric => Variable::numeric(target),
+                        VariableType::String(w) => Variable::string(target, w),
+                    }
+                };
+                if let VariableType::String(w) = var_type {
+                    target_var.var_type = VariableType::String(w);
+                }
+                dataset.insert_or_replace_column(target, target_var, new_arrays)
+                    .map_err(|e| e.to_string())?;
+            }
+            Stmt::If(if_stmt) => {
+                let mut new_arrays = Vec::with_capacity(n_batches);
+                let mut final_var_type = None;
+                let target_exists = dataset.variable_index(&if_stmt.target).is_some();
+
+                for batch_idx in 0..n_batches {
+                    let n_rows = dataset.batches[batch_idx].num_rows();
+                    let mut values = Vec::with_capacity(n_rows);
+                    for row_idx in 0..n_rows {
+                        let is_active = mask[batch_idx][row_idx];
+                        let cond_true = if is_active {
+                            let cond_val = if_stmt.condition.eval(dataset, batch_idx, row_idx);
+                            match cond_val {
+                                Value::Numeric(n) => n != 0.0,
+                                _ => false,
+                            }
+                        } else {
+                            false
+                        };
+
+                        if cond_true {
+                            let val = if_stmt.expr.eval(dataset, batch_idx, row_idx);
+                            values.push(val);
+                        } else {
+                            if target_exists {
+                                let val = get_variable_value(dataset, batch_idx, row_idx, &if_stmt.target, false);
+                                values.push(val);
+                            } else {
+                                values.push(Value::SystemMissing);
+                            }
+                        }
+                    }
+                    let (array, var_type) = array_from_values(&values);
+                    new_arrays.push(array);
+                    final_var_type = Some(var_type);
+                }
+
+                let var_type = final_var_type.unwrap_or(VariableType::Numeric);
+                let mut target_var = if target_exists {
+                    dataset.variable(&if_stmt.target).unwrap().clone()
+                } else {
+                    match var_type {
+                        VariableType::Numeric => Variable::numeric(&if_stmt.target),
+                        VariableType::String(w) => Variable::string(&if_stmt.target, w),
+                    }
+                };
+                if let VariableType::String(w) = var_type {
+                    target_var.var_type = VariableType::String(w);
+                }
+                dataset.insert_or_replace_column(&if_stmt.target, target_var, new_arrays)
+                    .map_err(|e| e.to_string())?;
+            }
+            Stmt::Recode(recode_stmt) => {
+                let targets = recode_stmt.target_vars.as_ref().unwrap_or(&recode_stmt.src_vars);
+                if targets.len() != recode_stmt.src_vars.len() {
+                    return Err("Source and target variable lists must have same length".to_string());
+                }
+
+                for (src_name, target_name) in recode_stmt.src_vars.iter().zip(targets.iter()) {
+                    let src_idx = match dataset.variable_index(src_name) {
+                        Some(idx) => idx,
+                        None => return Err(format!("Source variable '{}' not found", src_name)),
+                    };
+                    let src_var = dataset.variables[src_idx].clone();
+
+                    let mut new_arrays = Vec::with_capacity(n_batches);
+                    let mut final_var_type = None;
+                    let target_exists = dataset.variable_index(target_name).is_some();
+                    let in_place = src_name == target_name;
+
+                    for batch_idx in 0..n_batches {
+                        let n_rows = dataset.batches[batch_idx].num_rows();
+                        let mut values = Vec::with_capacity(n_rows);
+                        for row_idx in 0..n_rows {
+                            if mask[batch_idx][row_idx] {
+                                let original_val = get_variable_value(dataset, batch_idx, row_idx, src_name, false);
+                                let recoded_val = eval_recode_value(&original_val, &src_var, &recode_stmt.mappings, in_place);
+                                values.push(recoded_val);
+                            } else {
+                                if target_exists {
+                                    let val = get_variable_value(dataset, batch_idx, row_idx, target_name, false);
+                                    values.push(val);
+                                } else {
+                                    values.push(Value::SystemMissing);
+                                }
+                            }
+                        }
+                        let (array, var_type) = array_from_values(&values);
+                        new_arrays.push(array);
+                        final_var_type = Some(var_type);
+                    }
+
+                    let var_type = final_var_type.unwrap_or(VariableType::Numeric);
+                    let mut target_var = if target_exists {
+                        dataset.variable(target_name).unwrap().clone()
+                    } else {
+                        match var_type {
+                            VariableType::Numeric => Variable::numeric(target_name),
+                            VariableType::String(w) => Variable::string(target_name, w),
+                        }
+                    };
+                    if let VariableType::String(w) = var_type {
+                        target_var.var_type = VariableType::String(w);
+                    }
+                    dataset.insert_or_replace_column(target_name, target_var, new_arrays)
+                        .map_err(|e| e.to_string())?;
+                }
+            }
+            Stmt::DoIf(do_if) => {
+                let mut matched_mask = Vec::with_capacity(n_batches);
+                for batch_idx in 0..n_batches {
+                    matched_mask.push(vec![false; dataset.batches[batch_idx].num_rows()]);
+                }
+
+                let mut main_mask = Vec::with_capacity(n_batches);
+                for batch_idx in 0..n_batches {
+                    let n_rows = dataset.batches[batch_idx].num_rows();
+                    let mut batch_main_mask = vec![false; n_rows];
+                    for row_idx in 0..n_rows {
+                        if mask[batch_idx][row_idx] {
+                            let cond_val = do_if.condition.eval(dataset, batch_idx, row_idx);
+                            let is_true = match cond_val {
+                                Value::Numeric(n) => n != 0.0,
+                                _ => false,
+                            };
+                            if is_true {
+                                batch_main_mask[row_idx] = true;
+                                matched_mask[batch_idx][row_idx] = true;
+                            }
+                        }
+                    }
+                    main_mask.push(batch_main_mask);
+                }
+
+                for stmt in &do_if.body {
+                    stmt.execute_masked(dataset, &main_mask)?;
+                }
+
+                for (elif_cond, elif_body) in &do_if.else_ifs {
+                    let mut elif_mask = Vec::with_capacity(n_batches);
+                    for batch_idx in 0..n_batches {
+                        let n_rows = dataset.batches[batch_idx].num_rows();
+                        let mut batch_elif_mask = vec![false; n_rows];
+                        for row_idx in 0..n_rows {
+                            if mask[batch_idx][row_idx] && !matched_mask[batch_idx][row_idx] {
+                                let cond_val = elif_cond.eval(dataset, batch_idx, row_idx);
+                                let is_true = match cond_val {
+                                    Value::Numeric(n) => n != 0.0,
+                                    _ => false,
+                                };
+                                if is_true {
+                                    batch_elif_mask[row_idx] = true;
+                                    matched_mask[batch_idx][row_idx] = true;
+                                }
+                            }
+                        }
+                        elif_mask.push(batch_elif_mask);
+                    }
+                    for stmt in elif_body {
+                        stmt.execute_masked(dataset, &elif_mask)?;
+                    }
+                }
+
+                if let Some(else_body) = &do_if.else_body {
+                    let mut else_mask = Vec::with_capacity(n_batches);
+                    for batch_idx in 0..n_batches {
+                        let n_rows = dataset.batches[batch_idx].num_rows();
+                        let mut batch_else_mask = vec![false; n_rows];
+                        for row_idx in 0..n_rows {
+                            if mask[batch_idx][row_idx] && !matched_mask[batch_idx][row_idx] {
+                                batch_else_mask[row_idx] = true;
+                            }
+                        }
+                        else_mask.push(batch_else_mask);
+                    }
+                    for stmt in else_body {
+                        stmt.execute_masked(dataset, &else_mask)?;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Expr {
     pub fn eval(&self, dataset: &Dataset, batch_idx: usize, row_idx: usize) -> Value {
         match self {
@@ -1407,6 +2075,77 @@ mod tests {
         // XDATE.YEAR(DATE.DMY(15, 6, 2026)) = 2026
         let xdate_expr = parse("XDATE.YEAR(DATE.DMY(15, 6, 2026))").unwrap();
         assert_eq!(xdate_expr.eval(&dataset, 0, 0), Value::Numeric(2026.0));
+    }
+
+    #[test]
+    fn test_parse_statements() {
+        let compute_stmt = parse_statement("COMPUTE Z = X + Y.").unwrap();
+        assert!(matches!(compute_stmt, Stmt::Compute { .. }));
+
+        let if_stmt = parse_statement("IF (X > 15) Z = 99.").unwrap();
+        assert!(matches!(if_stmt, Stmt::If { .. }));
+
+        let recode_stmt = parse_statement("RECODE X (1=2) (3 thru 5 = 4) (else=copy) INTO Y.").unwrap();
+        assert!(matches!(recode_stmt, Stmt::Recode { .. }));
+
+        let do_if_stmt = parse_statement("DO IF X > 15. COMPUTE Z = 1. ELSE. COMPUTE Z = 0. END IF.").unwrap();
+        assert!(matches!(do_if_stmt, Stmt::DoIf { .. }));
+    }
+
+    #[test]
+    fn test_execute_compute_if() {
+        let mut dataset = create_mock_dataset();
+
+        let compute_stmt = parse_statement("COMPUTE Z = X + Y.").unwrap();
+        compute_stmt.execute(&mut dataset).unwrap();
+
+        assert_eq!(get_variable_value(&dataset, 0, 0, "Z", false), Value::Numeric(12.0));
+        assert_eq!(get_variable_value(&dataset, 0, 1, "Z", false), Value::Numeric(20.0));
+        assert_eq!(get_variable_value(&dataset, 0, 2, "Z", false), Value::SystemMissing);
+        assert_eq!(get_variable_value(&dataset, 0, 3, "Z", false), Value::SystemMissing);
+
+        let if_stmt = parse_statement("IF (Y = 0) Z = 99.").unwrap();
+        if_stmt.execute(&mut dataset).unwrap();
+
+        assert_eq!(get_variable_value(&dataset, 0, 1, "Z", false), Value::Numeric(99.0));
+    }
+
+    #[test]
+    fn test_execute_recode() {
+        let mut dataset = create_mock_dataset();
+
+        let recode_stmt = parse_statement("RECODE Y (2=20) (0=10) (else=copy).").unwrap();
+        recode_stmt.execute(&mut dataset).unwrap();
+
+        assert_eq!(get_variable_value(&dataset, 0, 0, "Y", false), Value::Numeric(20.0));
+        assert_eq!(get_variable_value(&dataset, 0, 1, "Y", false), Value::Numeric(10.0));
+        assert_eq!(get_variable_value(&dataset, 0, 2, "Y", false), Value::Numeric(5.0));
+
+        let recode_into = parse_statement("RECODE X (10=1) (else=sysmis) INTO X_NEW.").unwrap();
+        recode_into.execute(&mut dataset).unwrap();
+
+        assert_eq!(get_variable_value(&dataset, 0, 0, "X_NEW", false), Value::Numeric(1.0));
+        assert_eq!(get_variable_value(&dataset, 0, 1, "X_NEW", false), Value::SystemMissing);
+    }
+
+    #[test]
+    fn test_execute_do_if() {
+        let mut dataset = create_mock_dataset();
+
+        let do_if = parse_statement(
+            "DO IF Y = 2. \
+             COMPUTE W = 100. \
+             ELSE IF Y = 0. \
+             COMPUTE W = 200. \
+             ELSE. \
+             COMPUTE W = 300. \
+             END IF."
+        ).unwrap();
+        do_if.execute(&mut dataset).unwrap();
+
+        assert_eq!(get_variable_value(&dataset, 0, 0, "W", false), Value::Numeric(100.0));
+        assert_eq!(get_variable_value(&dataset, 0, 1, "W", false), Value::Numeric(200.0));
+        assert_eq!(get_variable_value(&dataset, 0, 2, "W", false), Value::Numeric(300.0));
     }
 }
 

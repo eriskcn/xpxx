@@ -1542,6 +1542,7 @@ dependencies = [
 name = "oxstat-expr"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "oxstat-core",
  "thiserror 2.0.18",
  "winnow",

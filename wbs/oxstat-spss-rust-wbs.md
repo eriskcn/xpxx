@@ -26,7 +26,7 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 ├── 1.4 Expression engine
 │   ├── 1.4.1 COMPUTE-style expression parser [Done]
 │   ├── 1.4.2 Built-in functions (math, string, date, statistical) [Done]
-│   └── 1.4.3 Conditional logic (IF/RECODE/DO IF) [Stub]
+│   └── 1.4.3 Conditional logic (IF/RECODE/DO IF) [Done]
 └── 1.5 Data transformations
     ├── 1.5.1 SELECT IF / FILTER [Stub]
     ├── 1.5.2 SORT CASES [Stub]
