@@ -1542,6 +1542,7 @@ dependencies = [
 name = "oxstat-expr"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "oxstat-core",
  "thiserror 2.0.18",
  "winnow",
@@ -1557,6 +1558,7 @@ dependencies = [
  "oxstat-core",
  "parquet",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
 ]
 

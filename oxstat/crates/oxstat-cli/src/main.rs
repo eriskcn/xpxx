@@ -43,6 +43,9 @@ fn main() -> Result<()> {
         let dataset = if data_file.ends_with(".xlsx") || data_file.ends_with(".xls") {
             oxstat_io::read_excel(data_file, None)
                 .map_err(|e| anyhow::anyhow!("Failed to read Excel: {e}"))?
+        } else if data_file.ends_with(".parquet") {
+            oxstat_io::read_parquet(data_file)
+                .map_err(|e| anyhow::anyhow!("Failed to read Parquet: {e}"))?
         } else {
             oxstat_io::read_csv(data_file)
                 .map_err(|e| anyhow::anyhow!("Failed to read CSV: {e}"))?

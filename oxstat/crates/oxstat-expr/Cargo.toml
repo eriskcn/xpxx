@@ -9,3 +9,4 @@ license.workspace = true
 oxstat-core = { workspace = true }
 winnow = { workspace = true }
 thiserror = { workspace = true }
+arrow = { workspace = true }
