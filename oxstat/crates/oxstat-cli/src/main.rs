@@ -46,6 +46,9 @@ fn main() -> Result<()> {
         } else if data_file.ends_with(".parquet") {
             oxstat_io::read_parquet(data_file)
                 .map_err(|e| anyhow::anyhow!("Failed to read Parquet: {e}"))?
+        } else if data_file.ends_with(".sav") {
+            oxstat_io::read_sav(data_file)
+                .map_err(|e| anyhow::anyhow!("Failed to read SPSS SAV: {e}"))?
         } else {
             oxstat_io::read_csv(data_file)
                 .map_err(|e| anyhow::anyhow!("Failed to read CSV: {e}"))?

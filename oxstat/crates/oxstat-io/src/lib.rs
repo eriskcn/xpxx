@@ -10,3 +10,4 @@ pub mod sav;
 pub use csv_io::{read_csv, write_csv};
 pub use excel_io::read_excel;
 pub use parquet_io::{read_parquet, write_parquet};
+pub use sav::{read_sav, write_sav};

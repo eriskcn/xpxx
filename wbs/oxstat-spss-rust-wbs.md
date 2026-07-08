@@ -19,7 +19,7 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 │   ├── 1.2.3 Variable metadata (labels, value labels, measurement level) [Done]
 │   └── 1.2.4 Variable types (numeric, string, date/time) [Done]
 ├── 1.3 File I/O
-│   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Stub]
+│   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Done]
 │   ├── 1.3.2 CSV import/export [Done]
 │   ├── 1.3.3 Excel import (calamine crate) [Done]
 │   └── 1.3.4 Parquet import/export [Done]
