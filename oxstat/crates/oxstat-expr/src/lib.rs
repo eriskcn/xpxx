@@ -2,17 +2,15 @@
 //!
 //! Handles COMPUTE, IF, RECODE expression parsing and evaluation.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow::array::{Array, ArrayRef, Float64Builder, StringBuilder};
-use arrow::record_batch::RecordBatch;
 use winnow::prelude::*;
 use winnow::ascii::{float, space0, Caseless};
 use winnow::combinator::{alt, fail, not, opt, peek, terminated};
 use winnow::token::{literal, one_of};
 
-use oxstat_core::{Dataset, MissingValues, Value, Variable, VariableType};
+use oxstat_core::{Dataset, Value, Variable, VariableType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOp {
@@ -232,7 +230,7 @@ fn parse_function_call<'s>(input: &mut &'s str) -> PResult<Expr> {
 
     let mut base_name = name;
     let mut min_valid = None;
-    if let Some(dot_idx) = base_name.find('.') {
+    if base_name.contains('.') {
         let parts: Vec<&str> = base_name.split('.').collect();
         if parts.len() == 2 {
             if let Ok(num) = parts[1].parse::<usize>() {
@@ -708,7 +706,6 @@ fn parse_do_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
 
     loop {
         let _ = space0.parse_next(input)?;
-        let checkpoint = *input;
 
         if keyword("ELSE IF").parse_next(input).is_ok() {
             let _ = space0.parse_next(input)?;
@@ -1948,6 +1945,7 @@ mod tests {
     use super::*;
     use arrow::array::{Float64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::record_batch::RecordBatch;
     use std::sync::Arc;
 
     fn create_mock_dataset() -> Dataset {
