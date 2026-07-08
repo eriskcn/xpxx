@@ -19,7 +19,7 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 │   ├── 1.2.3 Variable metadata (labels, value labels, measurement level) [Done]
 │   └── 1.2.4 Variable types (numeric, string, date/time) [Done]
 ├── 1.3 File I/O
-│   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Stub]
+│   ├── 1.3.1 SPSS .sav reader/writer (binary format) [Done]
 │   ├── 1.3.2 CSV import/export [Done]
 │   ├── 1.3.3 Excel import (calamine crate) [Done]
 │   └── 1.3.4 Parquet import/export [Done]
@@ -28,11 +28,11 @@ Statistical analysis suite matching core SPSS functionality. Rust for performanc
 │   ├── 1.4.2 Built-in functions (math, string, date, statistical) [Done]
 │   └── 1.4.3 Conditional logic (IF/RECODE/DO IF) [Done]
 └── 1.5 Data transformations
-    ├── 1.5.1 SELECT IF / FILTER [Stub]
-    ├── 1.5.2 SORT CASES [Stub]
-    ├── 1.5.3 AGGREGATE [Stub]
-    ├── 1.5.4 MERGE FILES (match files, add files) [Stub]
-    └── 1.5.5 RESHAPE (cases-to-vars, vars-to-cases) [Stub]
+    ├── 1.5.1 SELECT IF / FILTER [Done]
+    ├── 1.5.2 SORT CASES [Done]
+    ├── 1.5.3 AGGREGATE [Done]
+    ├── 1.5.4 MERGE FILES (match files, add files) [Done]
+    └── 1.5.5 RESHAPE (cases-to-vars, vars-to-cases) [Done]
 ```
 
 ### Phase 2: Descriptive Statistics (Months 3–5)
