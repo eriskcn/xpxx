@@ -8,7 +8,7 @@ use std::io::{Read, Write, Seek, SeekFrom};
 use std::path::Path;
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Builder, StringBuilder, RecordBatch};
+use arrow::array::{ArrayRef, Float64Builder, StringBuilder, RecordBatch, ArrayBuilder};
 use arrow::datatypes::{DataType as ArrowDataType, Field, Schema};
 use oxstat_core::{Dataset, MeasureLevel, MissingValues, Value, Variable, VariableType};
 
@@ -45,40 +45,38 @@ struct SavVarRecord {
     original_type_code: i32,
 }
 
-struct CompressedReader<R> {
-    inner: R,
+struct CompressedReader {
     commands: [u8; 8],
     cmd_idx: usize,
 }
 
-impl<R: Read> CompressedReader<R> {
-    fn new(inner: R) -> Self {
+impl CompressedReader {
+    fn new() -> Self {
         Self {
-            inner,
             commands: [0; 8],
             cmd_idx: 8,
         }
     }
 
-    fn read_next_value(&mut self, bias: f64) -> std::io::Result<Value> {
+    fn read_next_value<R: Read>(&mut self, reader: &mut R, bias: f64) -> std::io::Result<Value> {
         if self.cmd_idx >= 8 {
-            self.inner.read_exact(&mut self.commands)?;
+            reader.read_exact(&mut self.commands)?;
             self.cmd_idx = 0;
         }
         let cmd = self.commands[self.cmd_idx];
         self.cmd_idx += 1;
 
         match cmd {
-            0 => self.read_next_value(bias),
+            0 => self.read_next_value(reader, bias),
             252 => Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "SPSS EOF")),
             253 => {
                 let mut buf = [0u8; 8];
-                self.inner.read_exact(&mut buf)?;
+                reader.read_exact(&mut buf)?;
                 Ok(Value::Numeric(f64::from_le_bytes(buf)))
             }
             254 => {
                 let mut buf = [0u8; 8];
-                self.inner.read_exact(&mut buf)?;
+                reader.read_exact(&mut buf)?;
                 Ok(Value::String(String::from_utf8_lossy(&buf).to_string()))
             }
             255 => Ok(Value::SystemMissing),
@@ -297,7 +295,7 @@ pub fn read_sav<P: AsRef<Path>>(path: P) -> Result<Dataset, Box<dyn std::error::
     let ncases = if ncases_header >= 0 { ncases_header as usize } else { 0 };
 
     // Prepare arrays builder
-    let mut builders: Vec<Box<dyn arrow::array::Builder>> = Vec::new();
+    let mut builders: Vec<Box<dyn ArrayBuilder>> = Vec::new();
     for var in &dataset_variables {
         match var.var_type {
             VariableType::Numeric => builders.push(Box::new(Float64Builder::new())),
@@ -305,7 +303,7 @@ pub fn read_sav<P: AsRef<Path>>(path: P) -> Result<Dataset, Box<dyn std::error::
         }
     }
 
-    let mut compressed_reader = CompressedReader::new(&mut file);
+    let mut compressed_reader = CompressedReader::new();
     let mut current_case = 0;
 
     loop {
@@ -327,7 +325,7 @@ pub fn read_sav<P: AsRef<Path>>(path: P) -> Result<Dataset, Box<dyn std::error::
                 if in_string {
                     // Read continuation string block (8 bytes)
                     let val = if compression == 1 {
-                        match compressed_reader.read_next_value(bias) {
+                        match compressed_reader.read_next_value(&mut file, bias) {
                             Ok(v) => v,
                             Err(_) => {
                                 err_eof = true;
@@ -360,7 +358,7 @@ pub fn read_sav<P: AsRef<Path>>(path: P) -> Result<Dataset, Box<dyn std::error::
 
             // Primary record
             let val = if compression == 1 {
-                match compressed_reader.read_next_value(bias) {
+                match compressed_reader.read_next_value(&mut file, bias) {
                     Ok(v) => v,
                     Err(_) => {
                         err_eof = true;

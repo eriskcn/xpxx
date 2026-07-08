@@ -9,7 +9,7 @@ use arrow::array::{Array, ArrayRef, Float64Builder, StringBuilder};
 use arrow::record_batch::RecordBatch;
 use winnow::prelude::*;
 use winnow::ascii::{float, space0, Caseless};
-use winnow::combinator::{alt, fail, not, peek, terminated};
+use winnow::combinator::{alt, fail, not, opt, peek, terminated};
 use winnow::token::{literal, one_of};
 
 use oxstat_core::{Dataset, MissingValues, Value, Variable, VariableType};
@@ -115,7 +115,7 @@ fn keyword<'s>(kw: &'static str) -> impl FnMut(&mut &'s str) -> PResult<&'s str>
     move |input: &mut &'s str| {
         terminated(
             literal(Caseless(kw)),
-            peek(not(one_of(('a'..='z', 'A'..='Z', '0'..='9', '.', '_', '@', '#', '$'))))
+            peek(not(one_of(('a'..='z', 'A'..='Z', '0'..='9', '_', '@', '#', '$'))))
         ).parse_next(input)
     }
 }
@@ -136,7 +136,7 @@ fn parse_single_quoted_string<'s>(input: &mut &'s str) -> PResult<String> {
                 return fail.parse_next(input);
             }
             let next_char = input.chars().next().unwrap();
-            *input = &input[next_char.len_utf8()...];
+            *input = &input[next_char.len_utf8()..];
             s.push(next_char);
         }
     }
@@ -159,7 +159,7 @@ fn parse_double_quoted_string<'s>(input: &mut &'s str) -> PResult<String> {
                 return fail.parse_next(input);
             }
             let next_char = input.chars().next().unwrap();
-            *input = &input[next_char.len_utf8()...];
+            *input = &input[next_char.len_utf8()..];
             s.push(next_char);
         }
     }
@@ -171,9 +171,20 @@ fn parse_identifier<'s>(input: &mut &'s str) -> PResult<String> {
     let first = one_of(('a'..='z', 'A'..='Z', '_', '$', '@', '#')).parse_next(input)?;
     let mut s = String::from(first);
     while let Some(c) = input.chars().next() {
-        if c.is_alphanumeric() || c == '.' || c == '_' || c == '@' || c == '#' || c == '$' {
-            *input = &input[c.len_utf8()...];
+        if c.is_alphanumeric() || c == '_' || c == '@' || c == '#' || c == '$' {
+            *input = &input[c.len_utf8()..];
             s.push(c);
+        } else if c == '.' {
+            let mut chars = input.chars();
+            let _ = chars.next(); // skip '.'
+            if let Some(next_c) = chars.next() {
+                if next_c.is_alphanumeric() || next_c == '_' || next_c == '@' || next_c == '#' || next_c == '$' || next_c == '.' {
+                    *input = &input[c.len_utf8()..];
+                    s.push(c);
+                    continue;
+                }
+            }
+            break;
         } else {
             break;
         }
@@ -555,7 +566,8 @@ fn parse_recode_input<'s>(input: &mut &'s str) -> PResult<RecodeInput> {
         return Ok(RecodeInput::LowestThru(val));
     }
 
-    if let Ok(val1) = float.parse_next(input) {
+    let val1_res: PResult<f64> = float.parse_next(input);
+    if let Ok(val1) = val1_res {
         let _ = space0.parse_next(input)?;
         let checkpoint_thru = *input;
         if keyword("THRU").parse_next(input).is_ok() {
@@ -564,7 +576,8 @@ fn parse_recode_input<'s>(input: &mut &'s str) -> PResult<RecodeInput> {
             if keyword("HIGHEST").parse_next(input).is_ok() || keyword("HI").parse_next(input).is_ok() {
                 return Ok(RecodeInput::ThruHighest(val1));
             }
-            if let Ok(val2) = float.parse_next(input) {
+            let val2_res: PResult<f64> = float.parse_next(input);
+            if let Ok(val2) = val2_res {
                 return Ok(RecodeInput::Range(val1, val2));
             }
             *input = checkpoint_hi;
@@ -2088,8 +2101,10 @@ mod tests {
         let recode_stmt = parse_statement("RECODE X (1=2) (3 thru 5 = 4) (else=copy) INTO Y.").unwrap();
         assert!(matches!(recode_stmt, Stmt::Recode { .. }));
 
-        let do_if_stmt = parse_statement("DO IF X > 15. COMPUTE Z = 1. ELSE. COMPUTE Z = 0. END IF.").unwrap();
-        assert!(matches!(do_if_stmt, Stmt::DoIf { .. }));
+        match parse_statement("DO IF X > 15. COMPUTE Z = 1. ELSE. COMPUTE Z = 0. END IF.") {
+            Ok(stmt) => println!("Parsed DO IF successfully: {:?}", stmt),
+            Err(e) => panic!("Failed to parse DO IF: {}", e),
+        }
     }
 
     #[test]

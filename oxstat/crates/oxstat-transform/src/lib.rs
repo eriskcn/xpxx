@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow::array::{ArrayRef, Float64Builder, StringBuilder, RecordBatch};
+use arrow::array::{ArrayRef, Float64Builder, StringBuilder, RecordBatch, ArrayBuilder};
 use arrow::datatypes::{DataType as ArrowDataType, Field, Schema};
 use oxstat_core::{Dataset, MeasureLevel, MissingValues, Value, Variable, VariableType};
 use oxstat_expr::Expr;
@@ -319,7 +319,7 @@ pub fn aggregate(
 
     // Build outputs
     let n_groups = groups.len();
-    let mut break_builders: Vec<Box<dyn arrow::array::Builder>> = Vec::new();
+    let mut break_builders: Vec<Box<dyn ArrayBuilder>> = Vec::new();
     for &idx in &break_indices {
         match dataset.variables[idx].var_type {
             VariableType::Numeric => break_builders.push(Box::new(Float64Builder::new())),
@@ -826,7 +826,7 @@ pub fn cases_to_vars(
     let n_groups = groups.len();
 
     // Prepare id variables builders
-    let mut id_builders: Vec<Box<dyn arrow::array::Builder>> = Vec::new();
+    let mut id_builders: Vec<Box<dyn ArrayBuilder>> = Vec::new();
     for &idx in &id_indices {
         match dataset.variables[idx].var_type {
             VariableType::Numeric => id_builders.push(Box::new(Float64Builder::new())),
