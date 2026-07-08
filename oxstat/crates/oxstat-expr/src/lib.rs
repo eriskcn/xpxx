@@ -5,9 +5,9 @@
 use std::sync::Arc;
 
 use arrow::array::{Array, ArrayRef, Float64Builder, StringBuilder};
-use winnow::prelude::*;
 use winnow::ascii::{float, space0, Caseless};
 use winnow::combinator::{alt, fail, not, opt, peek, terminated};
+use winnow::prelude::*;
 use winnow::token::{literal, one_of};
 
 use oxstat_core::{Dataset, Value, Variable, VariableType};
@@ -113,8 +113,17 @@ fn keyword<'s>(kw: &'static str) -> impl FnMut(&mut &'s str) -> PResult<&'s str>
     move |input: &mut &'s str| {
         terminated(
             literal(Caseless(kw)),
-            peek(not(one_of(('a'..='z', 'A'..='Z', '0'..='9', '_', '@', '#', '$'))))
-        ).parse_next(input)
+            peek(not(one_of((
+                'a'..='z',
+                'A'..='Z',
+                '0'..='9',
+                '_',
+                '@',
+                '#',
+                '$',
+            )))),
+        )
+        .parse_next(input)
     }
 }
 
@@ -176,7 +185,13 @@ fn parse_identifier<'s>(input: &mut &'s str) -> PResult<String> {
             let mut chars = input.chars();
             let _ = chars.next(); // skip '.'
             if let Some(next_c) = chars.next() {
-                if next_c.is_alphanumeric() || next_c == '_' || next_c == '@' || next_c == '#' || next_c == '$' || next_c == '.' {
+                if next_c.is_alphanumeric()
+                    || next_c == '_'
+                    || next_c == '@'
+                    || next_c == '#'
+                    || next_c == '$'
+                    || next_c == '.'
+                {
                     *input = &input[c.len_utf8()..];
                     s.push(c);
                     continue;
@@ -251,9 +266,16 @@ fn parse_variable<'s>(input: &mut &'s str) -> PResult<Expr> {
     let checkpoint = *input;
     let name = parse_identifier.parse_next(input)?;
     let upper = name.to_uppercase();
-    if upper == "AND" || upper == "OR" || upper == "NOT" ||
-       upper == "EQ" || upper == "NE" || upper == "LT" ||
-       upper == "LE" || upper == "GT" || upper == "GE" {
+    if upper == "AND"
+        || upper == "OR"
+        || upper == "NOT"
+        || upper == "EQ"
+        || upper == "NE"
+        || upper == "LT"
+        || upper == "LE"
+        || upper == "GT"
+        || upper == "GE"
+    {
         *input = checkpoint;
         return fail.parse_next(&mut "");
     }
@@ -268,7 +290,8 @@ fn parse_primary<'s>(input: &mut &'s str) -> PResult<Expr> {
         parse_number.map(Expr::Value),
         parse_string.map(Expr::Value),
         parse_variable,
-    )).parse_next(input)
+    ))
+    .parse_next(input)
 }
 
 fn parse_parenthesized<'s>(input: &mut &'s str) -> PResult<Expr> {
@@ -474,8 +497,7 @@ fn parse_expr<'s>(input: &mut &'s str) -> PResult<Expr> {
 
 pub fn parse(input: &str) -> Result<Expr, String> {
     let mut input_ref = input.trim();
-    let expr = parse_expr(&mut input_ref)
-        .map_err(|e| format!("Parsing error: {:?}", e))?;
+    let expr = parse_expr(&mut input_ref).map_err(|e| format!("Parsing error: {:?}", e))?;
     if !input_ref.is_empty() {
         return Err(format!("Trailing characters: '{}'", input_ref));
     }
@@ -505,7 +527,11 @@ fn parse_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
     let _ = space0.parse_next(input)?;
     let expr = parse_expr.parse_next(input)?;
     let _ = opt(literal(".")).parse_next(input)?;
-    Ok(Stmt::If(IfStmt { condition, target, expr }))
+    Ok(Stmt::If(IfStmt {
+        condition,
+        target,
+        expr,
+    }))
 }
 
 fn parse_identifier_list<'s>(input: &mut &'s str) -> PResult<Vec<String>> {
@@ -517,7 +543,13 @@ fn parse_identifier_list<'s>(input: &mut &'s str) -> PResult<Vec<String>> {
         let _ = space0.parse_next(input)?;
         if let Ok(ident) = parse_identifier.parse_next(input) {
             let upper = ident.to_uppercase();
-            if upper == "INTO" || upper == "THRU" || upper == "ELSE" || upper == "MISSING" || upper == "SYSMIS" || upper == "COPY" {
+            if upper == "INTO"
+                || upper == "THRU"
+                || upper == "ELSE"
+                || upper == "MISSING"
+                || upper == "SYSMIS"
+                || upper == "COPY"
+            {
                 *input = checkpoint;
                 break;
             }
@@ -571,7 +603,9 @@ fn parse_recode_input<'s>(input: &mut &'s str) -> PResult<RecodeInput> {
         if keyword("THRU").parse_next(input).is_ok() {
             let _ = space0.parse_next(input)?;
             let checkpoint_hi = *input;
-            if keyword("HIGHEST").parse_next(input).is_ok() || keyword("HI").parse_next(input).is_ok() {
+            if keyword("HIGHEST").parse_next(input).is_ok()
+                || keyword("HI").parse_next(input).is_ok()
+            {
                 return Ok(RecodeInput::ThruHighest(val1));
             }
             let val2_res: PResult<f64> = float.parse_next(input);
@@ -679,7 +713,11 @@ fn parse_recode_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
 
     let _ = opt(literal(".")).parse_next(input)?;
 
-    Ok(Stmt::Recode(RecodeStmt { src_vars, mappings, target_vars }))
+    Ok(Stmt::Recode(RecodeStmt {
+        src_vars,
+        mappings,
+        target_vars,
+    }))
 }
 
 fn parse_stmt_internal<'s>(input: &mut &'s str) -> PResult<Stmt> {
@@ -689,7 +727,8 @@ fn parse_stmt_internal<'s>(input: &mut &'s str) -> PResult<Stmt> {
         parse_if_stmt,
         parse_recode_stmt,
         parse_do_if_stmt,
-    )).parse_next(input)
+    ))
+    .parse_next(input)
 }
 
 fn parse_do_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
@@ -717,7 +756,10 @@ fn parse_do_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
             loop {
                 let _ = space0.parse_next(input)?;
                 let elif_checkpoint = *input;
-                if keyword("ELSE IF").parse_next(input).is_ok() || keyword("ELSE").parse_next(input).is_ok() || keyword("END IF").parse_next(input).is_ok() {
+                if keyword("ELSE IF").parse_next(input).is_ok()
+                    || keyword("ELSE").parse_next(input).is_ok()
+                    || keyword("END IF").parse_next(input).is_ok()
+                {
                     *input = elif_checkpoint;
                     break;
                 }
@@ -767,8 +809,8 @@ fn parse_do_if_stmt<'s>(input: &mut &'s str) -> PResult<Stmt> {
 
 pub fn parse_statement(input: &str) -> Result<Stmt, String> {
     let mut input_ref = input.trim();
-    let stmt = parse_stmt_internal(&mut input_ref)
-        .map_err(|e| format!("Parsing error: {:?}", e))?;
+    let stmt =
+        parse_stmt_internal(&mut input_ref).map_err(|e| format!("Parsing error: {:?}", e))?;
     if !input_ref.is_empty() {
         return Err(format!("Trailing characters: '{}'", input_ref));
     }
@@ -784,7 +826,13 @@ fn days_in_month(month: u32, year: u32) -> u32 {
     match month {
         1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
         4 | 6 | 9 | 11 => 30,
-        2 => if is_leap_year(year) { 29 } else { 28 },
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
         _ => 0,
     }
 }
@@ -925,7 +973,8 @@ fn eval_aggregate(
     batch_idx: usize,
     row_idx: usize,
 ) -> Value {
-    let valid_nums: Vec<f64> = args.iter()
+    let valid_nums: Vec<f64> = args
+        .iter()
         .map(|arg| arg.eval(dataset, batch_idx, row_idx))
         .filter_map(|v| match v {
             Value::Numeric(n) => Some(n),
@@ -996,7 +1045,11 @@ fn eval_function_call(
     if name == "MISSING" {
         if args.len() == 1 {
             let val = args[0].eval(dataset, batch_idx, row_idx);
-            return Value::Numeric(if val == Value::SystemMissing { 1.0 } else { 0.0 });
+            return Value::Numeric(if val == Value::SystemMissing {
+                1.0
+            } else {
+                0.0
+            });
         }
         return Value::SystemMissing;
     }
@@ -1004,10 +1057,18 @@ fn eval_function_call(
         if args.len() == 1 {
             if let Expr::Variable(vname) = &args[0] {
                 let raw_val = get_variable_value(dataset, batch_idx, row_idx, vname, true);
-                return Value::Numeric(if raw_val == Value::SystemMissing { 1.0 } else { 0.0 });
+                return Value::Numeric(if raw_val == Value::SystemMissing {
+                    1.0
+                } else {
+                    0.0
+                });
             } else {
                 let val = args[0].eval(dataset, batch_idx, row_idx);
-                return Value::Numeric(if val == Value::SystemMissing { 1.0 } else { 0.0 });
+                return Value::Numeric(if val == Value::SystemMissing {
+                    1.0
+                } else {
+                    0.0
+                });
             }
         }
         return Value::SystemMissing;
@@ -1031,7 +1092,8 @@ fn eval_function_call(
         return Value::Numeric(valid_count as f64);
     }
 
-    let evaluated_args: Vec<Value> = args.iter()
+    let evaluated_args: Vec<Value> = args
+        .iter()
         .map(|arg| arg.eval(dataset, batch_idx, row_idx))
         .collect();
 
@@ -1088,7 +1150,9 @@ fn eval_function_call(
                     return Value::Numeric(x.round());
                 }
             } else if evaluated_args.len() == 2 {
-                if let (Value::Numeric(x), Value::Numeric(mult)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::Numeric(x), Value::Numeric(mult)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if *mult != 0.0 {
                         return Value::Numeric((x / mult).round() * mult);
                     }
@@ -1102,7 +1166,9 @@ fn eval_function_call(
                     return Value::Numeric(x.trunc());
                 }
             } else if evaluated_args.len() == 2 {
-                if let (Value::Numeric(x), Value::Numeric(mult)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::Numeric(x), Value::Numeric(mult)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if *mult != 0.0 {
                         return Value::Numeric((x / mult).trunc() * mult);
                     }
@@ -1112,7 +1178,9 @@ fn eval_function_call(
         }
         "MOD" => {
             if evaluated_args.len() == 2 {
-                if let (Value::Numeric(x), Value::Numeric(y)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::Numeric(x), Value::Numeric(y)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if *y != 0.0 {
                         return Value::Numeric(x % y);
                     }
@@ -1209,7 +1277,9 @@ fn eval_function_call(
         }
         "SUBSTR" | "CHAR.SUBSTR" => {
             if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::Numeric(pos)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::Numeric(pos)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     let pos_idx = *pos as isize;
                     if pos_idx <= 0 || pos_idx as usize > s.len() {
                         return Value::String(String::new());
@@ -1218,7 +1288,9 @@ fn eval_function_call(
                     return Value::String(s[start..].to_string());
                 }
             } else if evaluated_args.len() == 3 {
-                if let (Value::String(s), Value::Numeric(pos), Value::Numeric(len)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::String(s), Value::Numeric(pos), Value::Numeric(len)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     let pos_idx = *pos as isize;
                     let length = *len as usize;
                     if pos_idx <= 0 || pos_idx as usize > s.len() {
@@ -1233,7 +1305,9 @@ fn eval_function_call(
         }
         "LPAD" => {
             if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::Numeric(len)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::Numeric(len)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     let length = *len as usize;
                     if s.len() >= length {
                         return Value::String(s.clone());
@@ -1243,14 +1317,18 @@ fn eval_function_call(
                     return Value::String(format!("{}{}", pad, s));
                 }
             } else if evaluated_args.len() == 3 {
-                if let (Value::String(s), Value::Numeric(len), Value::String(pad)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::String(s), Value::Numeric(len), Value::String(pad)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     let length = *len as usize;
                     if s.len() >= length || pad.is_empty() {
                         return Value::String(s.clone());
                     }
                     let pad_char = pad.chars().next().unwrap();
                     let pad_len = length - s.len();
-                    let pad_str = std::iter::repeat(pad_char).take(pad_len).collect::<String>();
+                    let pad_str = std::iter::repeat(pad_char)
+                        .take(pad_len)
+                        .collect::<String>();
                     return Value::String(format!("{}{}", pad_str, s));
                 }
             }
@@ -1258,7 +1336,9 @@ fn eval_function_call(
         }
         "RPAD" => {
             if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::Numeric(len)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::Numeric(len)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     let length = *len as usize;
                     if s.len() >= length {
                         return Value::String(s.clone());
@@ -1268,14 +1348,18 @@ fn eval_function_call(
                     return Value::String(format!("{}{}", s, pad));
                 }
             } else if evaluated_args.len() == 3 {
-                if let (Value::String(s), Value::Numeric(len), Value::String(pad)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::String(s), Value::Numeric(len), Value::String(pad)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     let length = *len as usize;
                     if s.len() >= length || pad.is_empty() {
                         return Value::String(s.clone());
                     }
                     let pad_char = pad.chars().next().unwrap();
                     let pad_len = length - s.len();
-                    let pad_str = std::iter::repeat(pad_char).take(pad_len).collect::<String>();
+                    let pad_str = std::iter::repeat(pad_char)
+                        .take(pad_len)
+                        .collect::<String>();
                     return Value::String(format!("{}{}", s, pad_str));
                 }
             }
@@ -1287,7 +1371,9 @@ fn eval_function_call(
                     return Value::String(s.trim_start().to_string());
                 }
             } else if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::String(c)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::String(c)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if let Some(trim_char) = c.chars().next() {
                         return Value::String(s.trim_start_matches(trim_char).to_string());
                     }
@@ -1302,7 +1388,9 @@ fn eval_function_call(
                     return Value::String(s.trim_end().to_string());
                 }
             } else if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::String(c)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::String(c)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if let Some(trim_char) = c.chars().next() {
                         return Value::String(s.trim_end_matches(trim_char).to_string());
                     }
@@ -1313,7 +1401,9 @@ fn eval_function_call(
         }
         "INDEX" | "CHAR.INDEX" => {
             if evaluated_args.len() == 2 {
-                if let (Value::String(s), Value::String(needle)) = (&evaluated_args[0], &evaluated_args[1]) {
+                if let (Value::String(s), Value::String(needle)) =
+                    (&evaluated_args[0], &evaluated_args[1])
+                {
                     if let Some(idx) = s.find(needle) {
                         return Value::Numeric((idx + 1) as f64);
                     } else {
@@ -1327,7 +1417,9 @@ fn eval_function_call(
         // Date Functions
         "DATE.DMY" => {
             if evaluated_args.len() == 3 {
-                if let (Value::Numeric(d), Value::Numeric(m), Value::Numeric(y)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::Numeric(d), Value::Numeric(m), Value::Numeric(y)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     if let Some(days) = days_since_1582_10_14(*d as u32, *m as u32, *y as u32) {
                         return Value::Numeric(days * 86400.0);
                     }
@@ -1337,7 +1429,9 @@ fn eval_function_call(
         }
         "DATE.MDY" => {
             if evaluated_args.len() == 3 {
-                if let (Value::Numeric(m), Value::Numeric(d), Value::Numeric(y)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::Numeric(m), Value::Numeric(d), Value::Numeric(y)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     if let Some(days) = days_since_1582_10_14(*d as u32, *m as u32, *y as u32) {
                         return Value::Numeric(days * 86400.0);
                     }
@@ -1347,7 +1441,9 @@ fn eval_function_call(
         }
         "TIME.HMS" => {
             if evaluated_args.len() == 3 {
-                if let (Value::Numeric(h), Value::Numeric(m), Value::Numeric(s)) = (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2]) {
+                if let (Value::Numeric(h), Value::Numeric(m), Value::Numeric(s)) =
+                    (&evaluated_args[0], &evaluated_args[1], &evaluated_args[2])
+                {
                     return Value::Numeric(*h * 3600.0 + *m * 60.0 + *s);
                 }
             }
@@ -1517,10 +1613,13 @@ fn eval_recode_value(
                     (Value::Numeric(n1), RecodeValue::Numeric(n2)) => n1 == n2,
                     (Value::String(s1), RecodeValue::String(s2)) => s1 == s2,
                     (Value::SystemMissing, RecodeValue::Sysmis) => true,
-                    (_, RecodeValue::Missing) => val.is_missing() || (match val {
-                        Value::Numeric(n) => var_metadata.missing.is_user_missing(*n),
-                        _ => false,
-                    }),
+                    (_, RecodeValue::Missing) => {
+                        val.is_missing()
+                            || (match val {
+                                Value::Numeric(n) => var_metadata.missing.is_user_missing(*n),
+                                _ => false,
+                            })
+                    }
                     _ => false,
                 },
                 RecodeInput::Range(lo, hi) => match val {
@@ -1578,7 +1677,8 @@ impl Stmt {
                             values.push(val);
                         } else {
                             if target_exists {
-                                let val = get_variable_value(dataset, batch_idx, row_idx, target, false);
+                                let val =
+                                    get_variable_value(dataset, batch_idx, row_idx, target, false);
                                 values.push(val);
                             } else {
                                 values.push(Value::SystemMissing);
@@ -1602,7 +1702,8 @@ impl Stmt {
                 if let VariableType::String(w) = var_type {
                     target_var.var_type = VariableType::String(w);
                 }
-                dataset.insert_or_replace_column(target, target_var, new_arrays)
+                dataset
+                    .insert_or_replace_column(target, target_var, new_arrays)
                     .map_err(|e| e.to_string())?;
             }
             Stmt::If(if_stmt) => {
@@ -1630,7 +1731,13 @@ impl Stmt {
                             values.push(val);
                         } else {
                             if target_exists {
-                                let val = get_variable_value(dataset, batch_idx, row_idx, &if_stmt.target, false);
+                                let val = get_variable_value(
+                                    dataset,
+                                    batch_idx,
+                                    row_idx,
+                                    &if_stmt.target,
+                                    false,
+                                );
                                 values.push(val);
                             } else {
                                 values.push(Value::SystemMissing);
@@ -1654,13 +1761,19 @@ impl Stmt {
                 if let VariableType::String(w) = var_type {
                     target_var.var_type = VariableType::String(w);
                 }
-                dataset.insert_or_replace_column(&if_stmt.target, target_var, new_arrays)
+                dataset
+                    .insert_or_replace_column(&if_stmt.target, target_var, new_arrays)
                     .map_err(|e| e.to_string())?;
             }
             Stmt::Recode(recode_stmt) => {
-                let targets = recode_stmt.target_vars.as_ref().unwrap_or(&recode_stmt.src_vars);
+                let targets = recode_stmt
+                    .target_vars
+                    .as_ref()
+                    .unwrap_or(&recode_stmt.src_vars);
                 if targets.len() != recode_stmt.src_vars.len() {
-                    return Err("Source and target variable lists must have same length".to_string());
+                    return Err(
+                        "Source and target variable lists must have same length".to_string()
+                    );
                 }
 
                 for (src_name, target_name) in recode_stmt.src_vars.iter().zip(targets.iter()) {
@@ -1680,12 +1793,25 @@ impl Stmt {
                         let mut values = Vec::with_capacity(n_rows);
                         for row_idx in 0..n_rows {
                             if mask[batch_idx][row_idx] {
-                                let original_val = get_variable_value(dataset, batch_idx, row_idx, src_name, false);
-                                let recoded_val = eval_recode_value(&original_val, &src_var, &recode_stmt.mappings, in_place);
+                                let original_val = get_variable_value(
+                                    dataset, batch_idx, row_idx, src_name, false,
+                                );
+                                let recoded_val = eval_recode_value(
+                                    &original_val,
+                                    &src_var,
+                                    &recode_stmt.mappings,
+                                    in_place,
+                                );
                                 values.push(recoded_val);
                             } else {
                                 if target_exists {
-                                    let val = get_variable_value(dataset, batch_idx, row_idx, target_name, false);
+                                    let val = get_variable_value(
+                                        dataset,
+                                        batch_idx,
+                                        row_idx,
+                                        target_name,
+                                        false,
+                                    );
                                     values.push(val);
                                 } else {
                                     values.push(Value::SystemMissing);
@@ -1709,7 +1835,8 @@ impl Stmt {
                     if let VariableType::String(w) = var_type {
                         target_var.var_type = VariableType::String(w);
                     }
-                    dataset.insert_or_replace_column(target_name, target_var, new_arrays)
+                    dataset
+                        .insert_or_replace_column(target_name, target_var, new_arrays)
                         .map_err(|e| e.to_string())?;
                 }
             }
@@ -1794,9 +1921,7 @@ impl Expr {
     pub fn eval(&self, dataset: &Dataset, batch_idx: usize, row_idx: usize) -> Value {
         match self {
             Expr::Value(val) => val.clone(),
-            Expr::Variable(name) => {
-                get_variable_value(dataset, batch_idx, row_idx, name, false)
-            }
+            Expr::Variable(name) => get_variable_value(dataset, batch_idx, row_idx, name, false),
             Expr::Unary(op, expr) => {
                 let val = expr.eval(dataset, batch_idx, row_idx);
                 match op {
@@ -1933,9 +2058,11 @@ impl Expr {
                     _ => Value::SystemMissing,
                 }
             }
-            Expr::FunctionCall { name, min_valid, args } => {
-                eval_function_call(name, *min_valid, args, dataset, batch_idx, row_idx)
-            }
+            Expr::FunctionCall {
+                name,
+                min_valid,
+                args,
+            } => eval_function_call(name, *min_valid, args, dataset, batch_idx, row_idx),
         }
     }
 }
@@ -1955,9 +2082,24 @@ mod tests {
             Field::new("S", DataType::Utf8, true),
         ]));
 
-        let x_arr = Arc::new(Float64Array::from(vec![Some(10.0), Some(20.0), None, Some(99.0)])) as Arc<dyn Array>;
-        let y_arr = Arc::new(Float64Array::from(vec![Some(2.0), Some(0.0), Some(5.0), Some(4.0)])) as Arc<dyn Array>;
-        let s_arr = Arc::new(StringArray::from(vec![Some("apple"), Some("banana"), None, Some("pear")])) as Arc<dyn Array>;
+        let x_arr = Arc::new(Float64Array::from(vec![
+            Some(10.0),
+            Some(20.0),
+            None,
+            Some(99.0),
+        ])) as Arc<dyn Array>;
+        let y_arr = Arc::new(Float64Array::from(vec![
+            Some(2.0),
+            Some(0.0),
+            Some(5.0),
+            Some(4.0),
+        ])) as Arc<dyn Array>;
+        let s_arr = Arc::new(StringArray::from(vec![
+            Some("apple"),
+            Some("banana"),
+            None,
+            Some("pear"),
+        ])) as Arc<dyn Array>;
 
         let batch = RecordBatch::try_new(schema, vec![x_arr, y_arr, s_arr]).unwrap();
 
@@ -2072,7 +2214,7 @@ mod tests {
         let missing_expr = parse("MISSING(X)").unwrap();
         let sysmis_expr = parse("SYSMIS(X)").unwrap();
         assert_eq!(missing_expr.eval(&dataset, 0, 3), Value::Numeric(1.0)); // 99.0 is missing
-        assert_eq!(sysmis_expr.eval(&dataset, 0, 3), Value::Numeric(0.0));  // but not system-missing
+        assert_eq!(sysmis_expr.eval(&dataset, 0, 3), Value::Numeric(0.0)); // but not system-missing
     }
 
     #[test]
@@ -2096,7 +2238,8 @@ mod tests {
         let if_stmt = parse_statement("IF (X > 15) Z = 99.").unwrap();
         assert!(matches!(if_stmt, Stmt::If { .. }));
 
-        let recode_stmt = parse_statement("RECODE X (1=2) (3 thru 5 = 4) (else=copy) INTO Y.").unwrap();
+        let recode_stmt =
+            parse_statement("RECODE X (1=2) (3 thru 5 = 4) (else=copy) INTO Y.").unwrap();
         assert!(matches!(recode_stmt, Stmt::Recode { .. }));
 
         match parse_statement("DO IF X > 15. COMPUTE Z = 1. ELSE. COMPUTE Z = 0. END IF.") {
@@ -2112,15 +2255,30 @@ mod tests {
         let compute_stmt = parse_statement("COMPUTE Z = X + Y.").unwrap();
         compute_stmt.execute(&mut dataset).unwrap();
 
-        assert_eq!(get_variable_value(&dataset, 0, 0, "Z", false), Value::Numeric(12.0));
-        assert_eq!(get_variable_value(&dataset, 0, 1, "Z", false), Value::Numeric(20.0));
-        assert_eq!(get_variable_value(&dataset, 0, 2, "Z", false), Value::SystemMissing);
-        assert_eq!(get_variable_value(&dataset, 0, 3, "Z", false), Value::SystemMissing);
+        assert_eq!(
+            get_variable_value(&dataset, 0, 0, "Z", false),
+            Value::Numeric(12.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 1, "Z", false),
+            Value::Numeric(20.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 2, "Z", false),
+            Value::SystemMissing
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 3, "Z", false),
+            Value::SystemMissing
+        );
 
         let if_stmt = parse_statement("IF (Y = 0) Z = 99.").unwrap();
         if_stmt.execute(&mut dataset).unwrap();
 
-        assert_eq!(get_variable_value(&dataset, 0, 1, "Z", false), Value::Numeric(99.0));
+        assert_eq!(
+            get_variable_value(&dataset, 0, 1, "Z", false),
+            Value::Numeric(99.0)
+        );
     }
 
     #[test]
@@ -2130,15 +2288,30 @@ mod tests {
         let recode_stmt = parse_statement("RECODE Y (2=20) (0=10) (else=copy).").unwrap();
         recode_stmt.execute(&mut dataset).unwrap();
 
-        assert_eq!(get_variable_value(&dataset, 0, 0, "Y", false), Value::Numeric(20.0));
-        assert_eq!(get_variable_value(&dataset, 0, 1, "Y", false), Value::Numeric(10.0));
-        assert_eq!(get_variable_value(&dataset, 0, 2, "Y", false), Value::Numeric(5.0));
+        assert_eq!(
+            get_variable_value(&dataset, 0, 0, "Y", false),
+            Value::Numeric(20.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 1, "Y", false),
+            Value::Numeric(10.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 2, "Y", false),
+            Value::Numeric(5.0)
+        );
 
         let recode_into = parse_statement("RECODE X (10=1) (else=sysmis) INTO X_NEW.").unwrap();
         recode_into.execute(&mut dataset).unwrap();
 
-        assert_eq!(get_variable_value(&dataset, 0, 0, "X_NEW", false), Value::Numeric(1.0));
-        assert_eq!(get_variable_value(&dataset, 0, 1, "X_NEW", false), Value::SystemMissing);
+        assert_eq!(
+            get_variable_value(&dataset, 0, 0, "X_NEW", false),
+            Value::Numeric(1.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 1, "X_NEW", false),
+            Value::SystemMissing
+        );
     }
 
     #[test]
@@ -2152,13 +2325,22 @@ mod tests {
              COMPUTE W = 200. \
              ELSE. \
              COMPUTE W = 300. \
-             END IF."
-        ).unwrap();
+             END IF.",
+        )
+        .unwrap();
         do_if.execute(&mut dataset).unwrap();
 
-        assert_eq!(get_variable_value(&dataset, 0, 0, "W", false), Value::Numeric(100.0));
-        assert_eq!(get_variable_value(&dataset, 0, 1, "W", false), Value::Numeric(200.0));
-        assert_eq!(get_variable_value(&dataset, 0, 2, "W", false), Value::Numeric(300.0));
+        assert_eq!(
+            get_variable_value(&dataset, 0, 0, "W", false),
+            Value::Numeric(100.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 1, "W", false),
+            Value::Numeric(200.0)
+        );
+        assert_eq!(
+            get_variable_value(&dataset, 0, 2, "W", false),
+            Value::Numeric(300.0)
+        );
     }
 }
-
